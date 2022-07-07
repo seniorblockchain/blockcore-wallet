@@ -1,15 +1,18 @@
-import { Component, OnInit, OnDestroy, ChangeDetectorRef, NgZone } from '@angular/core';
-import { HttpClient } from '@angular/common/http';
-import { UIState, CommunicationService, NetworksService, NetworkStatusService, SettingsService, WalletManager, StateService, NetworkLoader } from '../services';
-import { ActivatedRoute, Router } from '@angular/router';
-import { MatSnackBar } from '@angular/material/snack-bar';
-import { Account, AccountHistory, NetworkStatus, TransactionHistory } from '../../shared/interfaces';
-import { Subscription } from 'rxjs';
-import { AccountHistoryStore, AddressStore } from 'src/shared';
-import { AccountStateStore } from 'src/shared/store/account-state-store';
+import {Component, OnInit, OnDestroy, ChangeDetectorRef, NgZone} from '@angular/core';
+import {HttpClient} from '@angular/common/http';
+import {UIState, CommunicationService, NetworksService, NetworkStatusService, SettingsService, WalletManager, StateService, NetworkLoader} from '../services';
+import {ActivatedRoute, Router} from '@angular/router';
+import {MatSnackBar} from '@angular/material/snack-bar';
+import {Account, AccountHistory, NetworkStatus, Token, TransactionHistory} from '../../shared/interfaces';
+import {Subscription} from 'rxjs';
+import {AccountHistoryStore, AddressStore} from 'src/shared';
+import {AccountStateStore} from 'src/shared/store/account-state-store';
 import axiosRetry from 'axios-retry';
+import {StandardTokenStore} from "../../shared/store/standard-token-store";
+import {addWarning} from "@angular-devkit/build-angular/src/utils/webpack-diagnostics";
+
 const axios = require('axios').default;
-axiosRetry(axios, { retries: 3, retryDelay: axiosRetry.exponentialDelay });
+axiosRetry(axios, {retries: 3, retryDelay: axiosRetry.exponentialDelay});
 
 @Component({
   selector: 'app-account',
@@ -42,6 +45,8 @@ export class AccountComponent implements OnInit, OnDestroy {
   loginurl: string;
   loginurlMessage: string;
 
+  standardTokens: Token[];
+
   constructor(
     public uiState: UIState,
     public settings: SettingsService,
@@ -59,7 +64,8 @@ export class AccountComponent implements OnInit, OnDestroy {
     public walletManager: WalletManager,
     private accountStateStore: AccountStateStore,
     private networkLoader: NetworkLoader,
-    private snackBar: MatSnackBar) {
+    private snackBar: MatSnackBar,
+    private standardTokenStore: StandardTokenStore) {
 
     this.uiState.title = '';
     this.uiState.showBackButton = true;
@@ -94,7 +100,7 @@ export class AccountComponent implements OnInit, OnDestroy {
     const account = this.walletManager.activeAccount;
     const accountState = this.accountStateStore.get(account.identifier);
 
-    const accountHistory: AccountHistory = { balance: 0, unconfirmed: 0, history: [], unspent: [] };
+    const accountHistory: AccountHistory = {balance: 0, unconfirmed: 0, history: [], unspent: []};
     this.accountHistory = accountHistory;
 
     this.accountHistoryStore.set(account.identifier, accountHistory);
@@ -119,7 +125,7 @@ export class AccountComponent implements OnInit, OnDestroy {
     this.accountStateStore.save();
 
     // Send a message to run indexing on all wallets, send accountId for future optimization of running index only on this account.
-    this.communication.send(this.communication.createMessage('index', { accountId: this.walletManager.activeAccount.identifier }));
+    this.communication.send(this.communication.createMessage('index', {accountId: this.walletManager.activeAccount.identifier}));
 
     this.loading = false;
   }
@@ -137,8 +143,7 @@ export class AccountComponent implements OnInit, OnDestroy {
 
         let result: any = await this.http.get(`${indexerUrl}/api/stats/info`).toPromise();
         this.networkStatus = result;
-      }
-      catch (error: any) {
+      } catch (error: any) {
         console.error(error);
 
         if (error.error?.title) {
@@ -165,20 +170,18 @@ export class AccountComponent implements OnInit, OnDestroy {
     // sid:auth-api.opdex.com/v1/ssas/callback?uid=aDxrmQ8wDKUruKEzD17HJqPZSinveFEQaS1MbjMnXhG4_qtd92-Jjs_7sh3ajuo0peelx87-MvQV4MzvxafCpg&exp=1656544738
     console.info(this.loginurl);
 
-    try
-    {     
+    try {
       var expIndex = this.loginurl.indexOf('exp=')
       var expirationStr: any;
-      if(expIndex != -1)
-      {
+      if (expIndex != -1) {
         // Wallet should verify that the expiry datetime has not passed, if it is present
         // https://github.com/Opdex/SSAS/blob/main/README.md#wallet-compatibility
 
-        expirationStr = this.loginurl.substring(expIndex + 4); 
+        expirationStr = this.loginurl.substring(expIndex + 4);
         var currentDate = new Date();
         var expiryDate = new Date(expirationStr * 1000);
 
-        if(expiryDate < currentDate) {
+        if (expiryDate < currentDate) {
           this.loginurlMessage = "Login link expired";
           return;
         }
@@ -203,9 +206,7 @@ export class AccountComponent implements OnInit, OnDestroy {
 
       this.loginurlMessage = "";
       this.loginurl = "";
-    }
-    catch(error)
-    {
+    } catch (error) {
       this.loginurlMessage = error.toString();
     }
   }
@@ -255,5 +256,20 @@ export class AccountComponent implements OnInit, OnDestroy {
       this.uiState.title = this.walletManager.activeAccount?.name || '';
       this.updateAccountHistory();
     }));
+
+
+    const network = this.network.getNetwork(this.walletManager.activeAccount.networkType);
+    if (network.smartContractSupport) {
+      const indexerUrl = this.networkLoader.getServer(network.id, this.settings.values.server, this.settings.values.indexer);
+
+      //const tokens = await axios.get(`${indexerUrl}/api/query/${network.name}/tokens/${this.getAddressByIndex(account, 0, 0)}`);
+      const tokens = await axios.get(`${indexerUrl}/api/query/${network.name}/tokens/CM2EMRrT4AsUdksoWZxCYtCpYPhpWkgD9p`);
+      for (let token of tokens.data.items)
+        this.standardTokenStore.set(token.name, token);
+
+      this.standardTokens = tokens.data.items;
+    }
+
+
   }
 }

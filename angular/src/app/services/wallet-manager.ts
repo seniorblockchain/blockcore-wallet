@@ -1,34 +1,37 @@
 // import { HDKey } from "micro-bip32"; // TODO: Uninstall the previous package, replaced with @scure.
-import { HDKey } from '@scure/bip32';
-import { mnemonicToSeedSync } from '@scure/bip39';
+import {HDKey} from '@scure/bip32';
+import {mnemonicToSeedSync} from '@scure/bip39';
 import * as secp from '@noble/secp256k1';
 
-import { Account, AccountUnspentTransactionOutput, Address, Logger, Wallet } from '../../shared/interfaces';
-import { MINUTE } from '../shared/constants';
-import { Psbt } from '@blockcore/blockcore-js';
+import {Account, AccountUnspentTransactionOutput, Address, Logger, Wallet} from '../../shared/interfaces';
+import {MINUTE} from '../shared/constants';
+import {Psbt} from '@blockcore/blockcore-js';
 import * as ecc from 'tiny-secp256k1';
 import ECPairFactory from 'ecpair';
-import { Injectable } from '@angular/core';
-import { LoggerService } from './logger.service';
-import { CryptoUtility } from './crypto-utility';
+import {Injectable} from '@angular/core';
+import {LoggerService} from './logger.service';
+import {CryptoUtility} from './crypto-utility';
 import axiosRetry from 'axios-retry';
-import { SecureStateService } from './secure-state.service';
-import { UIState } from './ui-state.service';
-import { SettingsService } from './settings.service';
-import { BehaviorSubject, delay, Observable, of } from 'rxjs';
-import { NetworkLoader } from '../../shared/network-loader';
-import { Network } from '../../shared/networks';
-import { CommunicationService } from '.';
-import { AccountHistoryStore, AddressStore, AddressWatchStore, WalletStore } from 'src/shared';
+import {SecureStateService} from './secure-state.service';
+import {UIState} from './ui-state.service';
+import {SettingsService} from './settings.service';
+import {BehaviorSubject, delay, Observable, of} from 'rxjs';
+import {NetworkLoader} from '../../shared/network-loader';
+import {Network} from '../../shared/networks';
+import {CommunicationService} from '.';
+import {AccountHistoryStore, AddressStore, AddressWatchStore, WalletStore} from 'src/shared';
 import Big from 'big.js';
-import { StorageService } from './storage.service';
-import { RuntimeService } from './runtime.service';
-import { UnspentOutputService } from './unspent-output.service';
-import { AccountStateStore } from 'src/shared/store/account-state-store';
+import {StorageService} from './storage.service';
+import {RuntimeService} from './runtime.service';
+import {UnspentOutputService} from './unspent-output.service';
+import {AccountStateStore} from 'src/shared/store/account-state-store';
+import {StandardTokenStore} from "../../shared/store/standard-token-store";
+import {forEachResolvedProjectReference} from "ts-loader/dist/instances";
+
 const ECPair = ECPairFactory(ecc);
 var bitcoinMessage = require('bitcoinjs-message');
 const axios = require('axios').default;
-axiosRetry(axios, { retries: 3, retryDelay: axiosRetry.exponentialDelay });
+axiosRetry(axios, {retries: 3, retryDelay: axiosRetry.exponentialDelay});
 
 @Injectable({
   providedIn: 'root',
@@ -63,7 +66,8 @@ export class WalletManager {
     private storage: StorageService,
     private accountStateStore: AccountStateStore,
     private runtime: RuntimeService,
-    private logger: LoggerService
+    private logger: LoggerService,
+    private tokensStore: StandardTokenStore,
   ) {
     this.allNetworks = this.networkLoader.getAllNetworks();
   }
@@ -134,7 +138,7 @@ export class WalletManager {
     addressNode = masterNode.derive(`m/${account.purpose}'/${account.network}'/${account.index}'/${addressType}/${addressItem.index}`);
 
     try {
-      const ecPair = ECPair.fromPrivateKey(Buffer.from(addressNode.privateKey), { network: network });
+      const ecPair = ECPair.fromPrivateKey(Buffer.from(addressNode.privateKey), {network: network});
       const privateKey = ecPair.privateKey;
 
       var signature = bitcoinMessage.sign(content, privateKey, ecPair.compressed);
@@ -241,7 +245,7 @@ export class WalletManager {
     const accountState = this.accountStateStore.get(account.identifier);
     const affectedAddresses = [];
 
-    const tx = new Psbt({ network: network, maximumFeeRate: 5000 }); // satoshi per byte, 5000 is default.
+    const tx = new Psbt({network: network, maximumFeeRate: 5000}); // satoshi per byte, 5000 is default.
     tx.setVersion(1); // Lock-time is not used so set to 1 (defaults to 2).
     tx.setLocktime(0); // These are defaults. This line is not needed.
 
@@ -311,7 +315,7 @@ export class WalletManager {
     this.logger.debug('affectedAddresses: ', affectedAddresses);
 
     // Add the output the user requested.
-    tx.addOutput({ address, value: amount.toNumber() });
+    tx.addOutput({address, value: amount.toNumber()});
 
     // Take the total sum of the aggregated inputs, remove the sendAmount and fee.
     const changeAmount = aggregatedAmount.minus(amount).minus(fee); //  Number(aggregatedAmount) - Number(amount) - Number(fee);
@@ -325,7 +329,7 @@ export class WalletManager {
       }
 
       // // Send the rest to change address.
-      tx.addOutput({ address: changeAddress, value: changeAmount.toNumber() });
+      tx.addOutput({address: changeAddress, value: changeAmount.toNumber()});
     }
 
     // Get the secret seed.
@@ -357,7 +361,7 @@ export class WalletManager {
       }
 
       try {
-        const ecPair = ECPair.fromPrivateKey(Buffer.from(addressNode.privateKey), { network: network });
+        const ecPair = ECPair.fromPrivateKey(Buffer.from(addressNode.privateKey), {network: network});
         tx.signInput(i, ecPair);
       } catch (error) {
         this.logger.error(error);
@@ -385,7 +389,7 @@ export class WalletManager {
     this.logger.debug('sendTransaction:TransactionHex', transactionHex);
     const transactionId = await this.broadcastTransaction(account, transactionHex);
     this.logger.debug('TransactionId', transactionId);
-    return { transactionId, transactionHex };
+    return {transactionId, transactionHex};
   }
 
   getWallets() {
@@ -710,7 +714,8 @@ export class WalletManager {
         const account = wallet.accounts[i];
         await this.removeAccountHistory(account);
       }
-    } catch {}
+    } catch {
+    }
 
     this.store.remove(id);
 
@@ -738,7 +743,7 @@ export class WalletManager {
 
     // After updating all UI instances, also make sure we restart the watcher
     // because it holds state while interval looping.
-    this.communication.send(this.communication.createMessage('watch', { force: true }, 'background'));
+    this.communication.send(this.communication.createMessage('watch', {force: true}, 'background'));
   }
 
   async addAccount(account: Account, wallet: Wallet, runIndexIfRestored = true) {
@@ -795,7 +800,17 @@ export class WalletManager {
 
     // If the wallet type is restored, force an index process to restore the state.
     if (wallet.restored && runIndexIfRestored == true) {
-      this.communication.send(this.communication.createMessage('index', { force: true }, 'background'));
+      this.communication.send(this.communication.createMessage('index', {force: true}, 'background'));
+    }
+
+    debugger;
+    if (network.smartContractSupport) {
+      const indexerUrl = this.networkLoader.getServer(network.id, this.settings.values.server, this.settings.values.indexer);
+
+      //const tokens = await axios.get(`${indexerUrl}/api/query/${network.name}/tokens/${this.getAddressByIndex(account, 0, 0)}`);
+      const tokens = await axios.get(`${indexerUrl}/api/query/${network.name}/tokens/CM2EMRrT4AsUdksoWZxCYtCpYPhpWkgD9p`);
+      for (let token of tokens.data.items)
+        this.tokensStore.set(token.name, token);
     }
   }
 

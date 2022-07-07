@@ -98,6 +98,7 @@ import { ContactStore } from 'src/shared/store/contacts-store';
 import { ContactsViewComponent } from './contacts/view/view.component';
 import { ExchangeComponent } from './exchange/exchange.component';
 import { MatSlideToggleModule } from '@angular/material/slide-toggle';
+import {StandardTokenStore} from "../shared/store/standard-token-store";
 
 // required for AOT compilation
 export function HttpLoaderFactory(http: HttpClient): TranslateHttpLoader {
@@ -241,6 +242,7 @@ export function HttpLoaderFactory(http: HttpClient): TranslateHttpLoader {
     PermissionStore,
     AppUpdateService,
     ContactStore,
+    StandardTokenStore
   ],
   bootstrap: [AppComponent],
 })

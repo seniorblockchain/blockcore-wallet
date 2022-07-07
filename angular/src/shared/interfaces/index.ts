@@ -497,7 +497,16 @@ interface DIDResolutionResult {
   didResolutionMetadata: DIDResolutionMetadataEx;
 }
 
-interface ActionMessage {}
+export interface Token {
+  name: string;
+  symbol: string;
+  totalSupply: number;
+  address: string;
+  amount: number;
+}
+
+interface ActionMessage {
+}
 
 interface ActionMessageResponse {
   prompt: boolean;
