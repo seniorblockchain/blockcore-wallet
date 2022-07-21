@@ -122,7 +122,7 @@ export class AccountComponent implements OnInit, OnDestroy {
     // Reset the account state when performing a re-scan.
     accountState.balance = 0;
     this.accountStateStore.set(account.identifier, accountState);
-    this.accountStateStore.save();
+    await this.accountStateStore.save();
 
     // Send a message to run indexing on all wallets, send accountId for future optimization of running index only on this account.
     this.communication.send(this.communication.createMessage('index', {accountId: this.walletManager.activeAccount.identifier}));
@@ -257,19 +257,7 @@ export class AccountComponent implements OnInit, OnDestroy {
       this.updateAccountHistory();
     }));
 
-
-    const network = this.network.getNetwork(this.walletManager.activeAccount.networkType);
-    if (network.smartContractSupport) {
-      const indexerUrl = this.networkLoader.getServer(network.id, this.settings.values.server, this.settings.values.indexer);
-
-      //const tokens = await axios.get(`${indexerUrl}/api/query/${network.name}/tokens/${this.getAddressByIndex(account, 0, 0)}`);
-      const tokens = await axios.get(`${indexerUrl}/api/query/${network.name}/tokens/CM2EMRrT4AsUdksoWZxCYtCpYPhpWkgD9p`);
-      for (let token of tokens.data.items)
-        this.standardTokenStore.set(token.name, token);
-
-      this.standardTokens = tokens.data.items;
-    }
-
-
+    await this.standardTokenStore.load();
+    this.standardTokens = this.standardTokenStore.all();
   }
 }
